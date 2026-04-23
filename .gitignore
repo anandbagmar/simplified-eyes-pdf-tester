@@ -1,0 +1,6 @@
+config/imagetester.properties.local
+logs/
+jars/*.jar
+!jars/.gitkeep
+*.pdf
+pdfs/
