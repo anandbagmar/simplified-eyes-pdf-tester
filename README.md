@@ -1,4 +1,4 @@
-# Rothbury PDF Validation with Applitools ImageTester
+# simplified-eyes-pdf-tester (using Applitools ImageTester)
 
 ## Objective
 
@@ -114,5 +114,5 @@ Detailed console output is also written to the `logs` folder for troubleshooting
 
 Update this section with your team’s preferred support contact before sharing widely.
 
-- Owner: Rothbury QA / Automation Team
-- Support: Add your email address or Teams channel here
+- Owner: Anand Bagmar
+- Support: https://www.linkedin.com/in/anandbagmar/
