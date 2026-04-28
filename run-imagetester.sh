@@ -278,55 +278,40 @@ print_result_details() {
   ' "$log_file"
 }
 
-format_live_output() {
+filter_live_output() {
   perl -ne '
-    BEGIN { %r = (); }
-
-    sub flush_result {
-      return unless $r{status};
-      print "----------------------------------------\n";
-      print "Applitools Result\n";
-      print "----------------------------------------\n";
-      print "Result    : $r{status}\n";
-      print "Test      : $r{name}\n";
-      print "Steps     : $r{steps} total, $r{matches} matches, $r{mismatches} mismatches, $r{missing} missing\n";
-      if ($r{accessibility}) {
-        print "Accessib. : $r{accessibility} ($r{acc_level}, $r{acc_version})\n";
-      }
-      if ($r{url}) {
-        print "URL       : $r{url}\n";
-      }
-      print "\n";
-      %r = ();
-    }
+    BEGIN { $skip_next_warning = 0; }
 
     chomp;
+
     if (/^\[(Unresolved|Passed|Failed|New|Aborted)\]/) {
-      flush_result();
-      $r{status} = $1;
-      $r{steps} = /steps:\s*(\d+)/ ? $1 : 0;
-      $r{name} = /test name:\s*([^,]+)/ ? $1 : "";
-      $r{matches} = /matches:\s*(\d+)/ ? $1 : 0;
-      $r{mismatches} = /mismatches:\s*(\d+)/ ? $1 : 0;
-      $r{missing} = /missing:\s*(\d+)/ ? $1 : 0;
-      $r{url} = /URL:\s*(https:\/\/\S+)/ ? $1 : "";
       next;
     }
-    if (/^Accessibility:/ && $r{status}) {
-      $r{accessibility} = /AccessibilityStatus{name='\''([^'\'']+)'\''}/ ? $1 : "";
-      $r{acc_level} = /AccessibilityLevel{name='\''([^'\'']+)'\''}/ ? $1 : "";
-      $r{acc_version} = /AccessibilityGuidelinesVersion{name='\''([^'\'']+)'\''}/ ? $1 : "";
-      flush_result();
+
+    if (/^Accessibility:/) {
       next;
     }
+
     if (/^\[\d+\/\d+\]\s*$/) {
       next;
     }
-    flush_result();
-    print "$_\n";
-    END {
-      flush_result();
+
+    if (/^SLF4J\(W\):/) {
+      next;
     }
+
+    if (/^[A-Z][a-z]{2} \d{1,2}, \d{4} .* org\.apache\.pdfbox\./) {
+      $skip_next_warning = 1;
+      next;
+    }
+
+    if ($skip_next_warning && /^WARNING:/) {
+      $skip_next_warning = 0;
+      next;
+    }
+
+    $skip_next_warning = 0;
+    print "$_\n";
   '
 }
 
@@ -474,7 +459,7 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
-java -jar "$JAR_PATH" "${RUN_ARGS[@]}" 2>&1 | tee "$LOG_FILE" | format_live_output
+java -jar "$JAR_PATH" "${RUN_ARGS[@]}" 2>&1 | tee "$LOG_FILE" | filter_live_output
 EXIT_CODE="${PIPESTATUS[0]}"
 
 DASHBOARD_URL="$(grep -Eo 'https://[^[:space:]]+' "$LOG_FILE" | tail -n 1 || true)"

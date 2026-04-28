@@ -289,69 +289,17 @@ function Get-ResultDetails {
     return $results
 }
 
-function Format-LiveOutput {
+function Filter-LiveOutput {
     param([string[]]$Lines)
 
-    $status = $null
-    $testName = $null
-    $steps = $null
-    $matchesCount = $null
-    $mismatches = $null
-    $missing = $null
-    $url = $null
-    $accessibilityStatus = $null
-    $accessibilityLevel = $null
-    $accessibilityVersion = $null
-
-    function Flush-Result {
-        if (-not $status) {
-            return
-        }
-
-        Write-Host "----------------------------------------"
-        Write-Host "Applitools Result"
-        Write-Host "----------------------------------------"
-        Write-Host "Result    : $status"
-        Write-Host "Test      : $testName"
-        Write-Host "Steps     : $steps total, $matchesCount matches, $mismatches mismatches, $missing missing"
-        if ($accessibilityStatus) {
-            Write-Host "Accessib. : $accessibilityStatus ($accessibilityLevel, $accessibilityVersion)"
-        }
-        if ($url) {
-            Write-Host "URL       : $url"
-        }
-        Write-Host ""
-
-        $script:status = $null
-        $script:testName = $null
-        $script:steps = $null
-        $script:matchesCount = $null
-        $script:mismatches = $null
-        $script:missing = $null
-        $script:url = $null
-        $script:accessibilityStatus = $null
-        $script:accessibilityLevel = $null
-        $script:accessibilityVersion = $null
-    }
+    $skipNextWarning = $false
 
     foreach ($line in $Lines) {
-        if ($line -match '^\[(?<status>Unresolved|Passed|Failed|New|Aborted)\]') {
-            Flush-Result
-            $status = $Matches["status"]
-            $testName = if ($line -match 'test name:\s*([^,]+)') { $Matches[1].Trim() } else { "" }
-            $steps = if ($line -match 'steps:\s*(\d+)') { $Matches[1] } else { "0" }
-            $matchesCount = if ($line -match 'matches:\s*(\d+)') { $Matches[1] } else { "0" }
-            $mismatches = if ($line -match 'mismatches:\s*(\d+)') { $Matches[1] } else { "0" }
-            $missing = if ($line -match 'missing:\s*(\d+)') { $Matches[1] } else { "0" }
-            $url = if ($line -match 'URL:\s*(https://\S+)') { $Matches[1] } else { "" }
+        if ($line -match '^\[(Unresolved|Passed|Failed|New|Aborted)\]') {
             continue
         }
 
-        if ($line -match '^Accessibility:' -and $status) {
-            $accessibilityStatus = if ($line -match "AccessibilityStatus{name='([^']+)'}") { $Matches[1] } else { "" }
-            $accessibilityLevel = if ($line -match "AccessibilityLevel{name='([^']+)'}") { $Matches[1] } else { "" }
-            $accessibilityVersion = if ($line -match "AccessibilityGuidelinesVersion{name='([^']+)'}") { $Matches[1] } else { "" }
-            Flush-Result
+        if ($line -match '^Accessibility:') {
             continue
         }
 
@@ -359,11 +307,23 @@ function Format-LiveOutput {
             continue
         }
 
-        Flush-Result
+        if ($line -match '^SLF4J\(W\):') {
+            continue
+        }
+
+        if ($line -match '^[A-Z][a-z]{2} \d{1,2}, \d{4} .* org\.apache\.pdfbox\.') {
+            $skipNextWarning = $true
+            continue
+        }
+
+        if ($skipNextWarning -and $line -match '^WARNING:') {
+            $skipNextWarning = $false
+            continue
+        }
+
+        $skipNextWarning = $false
         Write-Host $line
     }
-
-    Flush-Result
 }
 
 $rootDir = $PSScriptRoot
@@ -494,7 +454,7 @@ if ($DryRun) {
 }
 
 & java -jar $jarPath @runArgs 2>&1 | Tee-Object -FilePath $logPath | ForEach-Object { $_.ToString() } | Tee-Object -Variable formattedLines | Out-Null
-Format-LiveOutput -Lines $formattedLines
+Filter-LiveOutput -Lines $formattedLines
 $exitCode = $LASTEXITCODE
 
 $dashboardUrl = Select-String -LiteralPath $logPath -Pattern 'https://\S+' -AllMatches |
